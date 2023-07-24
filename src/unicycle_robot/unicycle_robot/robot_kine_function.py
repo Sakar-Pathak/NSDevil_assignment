@@ -39,7 +39,7 @@ class RobotKineNode(Node):
 
 
         # Sampling time of the robot (adjust as needed)
-        self.sampling_time = 1  # 1seconds
+        self.sampling_time = 0.1  # 1seconds
 
         # Time threshold for synchronization (adjust as needed)
         self.time_threshold = self.sampling_time * 0.5  # 50% of sampling time

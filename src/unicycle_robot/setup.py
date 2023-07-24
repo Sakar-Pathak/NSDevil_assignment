@@ -20,7 +20,8 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'unicycle_robot = unicycle_robot.robot_kine_function:main'
+            'unicycle_robot = unicycle_robot.robot_kine_function:main',
+            'unicycle_robot_simulator = unicycle_robot.robot_simulator:main',
         ],
     },
 )

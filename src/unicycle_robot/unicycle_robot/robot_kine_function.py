@@ -2,7 +2,9 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 
-from unicycle_robot_interfaces.msg import UnicycleState, UnicycleControl, UnicycleDerivative
+from unicycle_robot_interfaces.msg import UnicycleState, UnicycleControl
+from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
 
 class RobotKineNode(Node):
 
@@ -25,9 +27,9 @@ class RobotKineNode(Node):
         )
 
         # Create a publisher for the derivative vector
-        self.derivative_publisher = self.create_publisher(
-            UnicycleDerivative,
-            'derivative_vector',
+        self.odom_publisher = self.create_publisher(
+            Odometry,
+            '/robot_odom',
             10
         )
 
@@ -39,7 +41,7 @@ class RobotKineNode(Node):
 
 
         # Sampling time of the robot (adjust as needed)
-        self.sampling_time = 0.1  # 1seconds
+        self.sampling_time = 1  # 1seconds
 
         # Time threshold for synchronization (adjust as needed)
         self.time_threshold = self.sampling_time * 0.5  # 50% of sampling time
@@ -51,7 +53,7 @@ class RobotKineNode(Node):
 
         # If both state and control messages are available and synchronized, compute the derivative and publish
         if self.are_messages_synchronized():
-            self.compute_and_publish_derivative()
+            self.compute_and_publish_odometry()
 
     def control_callback(self, msg):
         # Save the received control message and timestamp
@@ -60,7 +62,7 @@ class RobotKineNode(Node):
 
         # If both state and control messages are available and synchronized, compute the derivative and publish
         if self.are_messages_synchronized():
-            self.compute_and_publish_derivative()
+            self.compute_and_publish_odometry()
 
     def are_messages_synchronized(self):
         # Check if both state and control messages are available and have valid timestamps
@@ -79,7 +81,7 @@ class RobotKineNode(Node):
 
         return False
 
-    def compute_and_publish_derivative(self):
+    def compute_and_publish_odometry(self):
         # Compute the derivative of the state vector for a unicycle robot using the latest messages
         state_vector = [self.latest_state_msg.x, self.latest_state_msg.y, self.latest_state_msg.theta]
         control_vector = [self.latest_control_msg.v, self.latest_control_msg.omega]
@@ -92,13 +94,52 @@ class RobotKineNode(Node):
         theta_dot = omega
 
         # Pack the derivative values into a custom message
-        derivative_msg = UnicycleDerivative()
-        derivative_msg.x_dot = x_dot
-        derivative_msg.y_dot = y_dot
-        derivative_msg.theta_dot = theta_dot
+        odom_msg = Odometry()
+        odom_msg.header.stamp = self.get_clock().now().to_msg()
+        odom_msg.header.frame_id = 'odom'
+        odom_msg.child_frame_id = 'base_link'
+
+
+        
+            # Set the pose information (position and orientation)
+        odom_msg.pose.pose.position.x = x
+        odom_msg.pose.pose.position.y = y
+        odom_msg.pose.pose.position.z = 0.0  # Assuming a 2D environment, so z is set to 0
+    
+        # Set the orientation (quaternion representation)
+        odom_msg.pose.pose.orientation.x = 0.0
+        odom_msg.pose.pose.orientation.y = 0.0
+        odom_msg.pose.pose.orientation.z = np.sin(theta / 2)
+        odom_msg.pose.pose.orientation.w = np.cos(theta / 2)
+
+        # set the covariance for pose to zero
+        # cov_x = 0.0
+        # cov_y = 0.0
+        # cov_z = 0.0
+        # cov_roll = 0.0
+        # cov_pitch = 0.0
+        # cov_yaw = 0.0
+        # odom_msg.pose.covariance = [cov_x, 0, 0, 0, 0, 0,
+        #                     0, cov_y, 0, 0, 0, 0,
+        #                     0, 0, cov_z, 0, 0, 0,
+        #                     0, 0, 0, cov_roll, 0, 0,
+        #                     0, 0, 0, 0, cov_pitch, 0,
+        #                     0, 0, 0, 0, 0, cov_yaw]
+        odom_msg.pose.covariance = [0.0]*36
+        
+        odom_msg.twist.twist.linear.x = x_dot
+        odom_msg.twist.twist.linear.y = y_dot
+        odom_msg.twist.twist.linear.z = 0.0
+
+        odom_msg.twist.twist.angular.x = 0.0
+        odom_msg.twist.twist.angular.y = 0.0
+        odom_msg.twist.twist.angular.z = theta_dot
+        # set the covariance for twist to zero
+        odom_msg.twist.covariance = [0.0]*36
 
         # Publish the derivative message
-        self.derivative_publisher.publish(derivative_msg)
+        self.odom_publisher.publish(odom_msg)
+
 
 def main(args=None):
     rclpy.init(args=args)

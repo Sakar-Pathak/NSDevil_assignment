@@ -2,27 +2,30 @@ import rclpy
 from rclpy.node import Node
 import numpy as np
 
-from unicycle_robot_interfaces.msg import UnicycleState, UnicycleControl
+from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import Pose, Point, Quaternion, Twist, Vector3
+from rcl_interfaces.msg import SetParametersResult
+
 
 class RobotKineNode(Node):
 
     def __init__(self):
         super().__init__('robot_kine')
 
-        # create subscriptions to the topics
-        self.state_subscriber = self.create_subscription(
-            UnicycleState,
-            'state_vector',
-            self.state_callback,
-            10
-        )
+        # Read the initial position from ROS parameters or set default values
+        self.declare_parameter('initial_params', [0.0, 0.0, 0.0])
+        initial_params = self.get_parameter('initial_params').value
+        self.initial_x = initial_params[0]
+        self.initial_y = initial_params[1]
+        self.initial_theta = initial_params[2]
 
-        self.control_subscriber = self.create_subscription(
-            UnicycleControl,
-            'control_vector',
-            self.control_callback,
+    
+
+
+        self.twist_subscriber = self.create_subscription(
+            Twist,
+            'robot_cmd',
+            self.twist_callback,
             10
         )
 
@@ -33,65 +36,47 @@ class RobotKineNode(Node):
             10
         )
 
-        # Initialize variables to store the latest state and control messages and their timestamps
-        self.latest_state_msg = None
-        self.latest_control_msg = None
-        self.latest_state_timestamp = None
-        self.latest_control_timestamp = None
-
-
         # Sampling time of the robot (adjust as needed)
         self.sampling_time = 1  # 1seconds
 
-        # Time threshold for synchronization (adjust as needed)
-        self.time_threshold = self.sampling_time * 0.5  # 50% of sampling time
+        # Create parameter callback to update the initial values when the parameters change
+    #     self.initial_params_param = self.get_parameter('initial_params')
+        # Create parameter callback to update the initial values when the parameters change
+        self.add_on_set_parameters_callback(self.parameter_callback)
 
-    def state_callback(self, msg):
-        # Save the received state message and timestamp
-        self.latest_state_msg = msg
-        self.latest_state_timestamp = self.get_clock().now()
+    def parameter_callback(self, params):
+        for param in params:
+            if param.name == 'initial_params':
+                self.initial_params = param.value
+                self.initial_x = self.initial_params[0]
+                self.initial_y = self.initial_params[1]
+                self.initial_theta = self.initial_params[2]
+        return SetParametersResult(successful=True)
 
-        # If both state and control messages are available and synchronized, compute the derivative and publish
-        if self.are_messages_synchronized():
-            self.compute_and_publish_odometry()
 
-    def control_callback(self, msg):
+
+    def twist_callback(self, msg):
         # Save the received control message and timestamp
-        self.latest_control_msg = msg
-        self.latest_control_timestamp = self.get_clock().now()
+        self.twist = msg
+        self.compute_and_publish_odometry()
+        print(self.initial_params)
 
-        # If both state and control messages are available and synchronized, compute the derivative and publish
-        if self.are_messages_synchronized():
-            self.compute_and_publish_odometry()
-
-    def are_messages_synchronized(self):
-        # Check if both state and control messages are available and have valid timestamps
-        if (
-            self.latest_state_msg is not None and
-            self.latest_control_msg is not None and
-            self.latest_state_timestamp is not None and
-            self.latest_control_timestamp is not None
-        ):
-            # Get the timestamps and compare using the desired time threshold (e.g., 100 milliseconds)
-            state_timestamp = self.latest_state_timestamp
-            control_timestamp = self.latest_control_timestamp
-
-            time_difference = abs((state_timestamp - control_timestamp).nanoseconds * 1e-9)
-            return time_difference < self.time_threshold
-
-        return False
 
     def compute_and_publish_odometry(self):
         # Compute the derivative of the state vector for a unicycle robot using the latest messages
-        state_vector = [self.latest_state_msg.x, self.latest_state_msg.y, self.latest_state_msg.theta]
-        control_vector = [self.latest_control_msg.v, self.latest_control_msg.omega]
+        x = self.initial_x + self.twist.linear.x * self.sampling_time
+        y = self.initial_y + self.twist.linear.y * self.sampling_time
+        theta = self.initial_theta + self.twist.angular.z * self.sampling_time
 
-        x, y, theta = state_vector
-        v, omega = control_vector
+        x_dot = self.twist.linear.x
+        y_dot = self.twist.linear.y
+        theta_dot = self.twist.angular.z
 
-        x_dot = v * np.cos(theta)
-        y_dot = v * np.sin(theta)
-        theta_dot = omega
+        # Update the initial position
+        self.initial_x = x
+        self.initial_y = y
+        self.initial_theta = theta
+
 
         # Pack the derivative values into a custom message
         odom_msg = Odometry()
@@ -112,19 +97,6 @@ class RobotKineNode(Node):
         odom_msg.pose.pose.orientation.z = np.sin(theta / 2)
         odom_msg.pose.pose.orientation.w = np.cos(theta / 2)
 
-        # set the covariance for pose to zero
-        # cov_x = 0.0
-        # cov_y = 0.0
-        # cov_z = 0.0
-        # cov_roll = 0.0
-        # cov_pitch = 0.0
-        # cov_yaw = 0.0
-        # odom_msg.pose.covariance = [cov_x, 0, 0, 0, 0, 0,
-        #                     0, cov_y, 0, 0, 0, 0,
-        #                     0, 0, cov_z, 0, 0, 0,
-        #                     0, 0, 0, cov_roll, 0, 0,
-        #                     0, 0, 0, 0, cov_pitch, 0,
-        #                     0, 0, 0, 0, 0, cov_yaw]
         odom_msg.pose.covariance = [0.0]*36
         
         odom_msg.twist.twist.linear.x = x_dot

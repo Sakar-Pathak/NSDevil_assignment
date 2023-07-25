@@ -40,6 +40,10 @@ class RobotKineNode(Node):
         # Create parameter callback to update the initial values when the parameters change
         self.add_on_set_parameters_callback(self.parameter_callback)
 
+        # publish the initial odometry
+        self.twist = Twist()
+        self.compute_and_publish_odometry()
+
     def parameter_callback(self, params):
         for param in params:
             if param.name == 'initial_params':

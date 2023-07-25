@@ -13,7 +13,7 @@ class RobotKineNode(Node):
         super().__init__('robot_kine')
 
         # Read the initial position and Ts from ROS parameters or set default values
-        self.declare_parameter('initial_params', [0.0, 0.0, 0.0, 0.1])
+        self.declare_parameter('initial_params', [5.0, 5.0, 0.0, 0.1])
         initial_params = self.get_parameter('initial_params').value
         self.initial_x = initial_params[0]
         self.initial_y = initial_params[1]

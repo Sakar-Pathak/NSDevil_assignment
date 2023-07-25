@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 
 T = 0.1  # [s]
-N = 100  # prediction horizon
+N = 10  # prediction horizon
 
 v_max = 0.6
 v_min = -v_max

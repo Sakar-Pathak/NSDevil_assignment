@@ -12,16 +12,15 @@ class RobotKineNode(Node):
     def __init__(self):
         super().__init__('robot_kine')
 
-        # Read the initial position from ROS parameters or set default values
-        self.declare_parameter('initial_params', [0.0, 0.0, 0.0])
+        # Read the initial position and Ts from ROS parameters or set default values
+        self.declare_parameter('initial_params', [0.0, 0.0, 0.0, 0.1])
         initial_params = self.get_parameter('initial_params').value
         self.initial_x = initial_params[0]
         self.initial_y = initial_params[1]
         self.initial_theta = initial_params[2]
+        self.Ts = initial_params[3]
 
     
-
-
         self.twist_subscriber = self.create_subscription(
             Twist,
             'robot_cmd',
@@ -36,9 +35,6 @@ class RobotKineNode(Node):
             10
         )
 
-        # Sampling time of the robot (adjust as needed)
-        self.sampling_time = 1  # 1seconds
-
         # Create parameter callback to update the initial values when the parameters change
     #     self.initial_params_param = self.get_parameter('initial_params')
         # Create parameter callback to update the initial values when the parameters change
@@ -51,6 +47,7 @@ class RobotKineNode(Node):
                 self.initial_x = self.initial_params[0]
                 self.initial_y = self.initial_params[1]
                 self.initial_theta = self.initial_params[2]
+                self.Ts = self.initial_params[3]
         return SetParametersResult(successful=True)
 
 
@@ -59,14 +56,13 @@ class RobotKineNode(Node):
         # Save the received control message and timestamp
         self.twist = msg
         self.compute_and_publish_odometry()
-        print(self.initial_params)
 
 
     def compute_and_publish_odometry(self):
         # Compute the derivative of the state vector for a unicycle robot using the latest messages
-        x = self.initial_x + self.twist.linear.x * self.sampling_time
-        y = self.initial_y + self.twist.linear.y * self.sampling_time
-        theta = self.initial_theta + self.twist.angular.z * self.sampling_time
+        x = self.initial_x + self.twist.linear.x * self.Ts
+        y = self.initial_y + self.twist.linear.y * self.Ts
+        theta = self.initial_theta + self.twist.angular.z * self.Ts
 
         x_dot = self.twist.linear.x
         y_dot = self.twist.linear.y
